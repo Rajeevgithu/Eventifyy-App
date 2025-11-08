@@ -1,45 +1,66 @@
-# Miscellaneous
-*.class
-*.log
-*.pyc
-*.swp
+# -----------------------
+# OS & Editor junk files
+# -----------------------
 .DS_Store
-.atom/
-.build/
-.buildlog/
-.history
-.svn/
-.swiftpm/
-migrate_working_dir/
-
-# IntelliJ related
-*.iml
-*.ipr
-*.iws
+Thumbs.db
 .idea/
+.vscode/
+*.iml
+*.log
+*.tmp
+*.swp
+*.swo
 
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
-
-# Flutter/Dart/Pub related
-**/doc/api/
-**/ios/Flutter/.last_build_id
+# -----------------------
+# Flutter & Dart
+# -----------------------
 .dart_tool/
+.flutter-plugins
 .flutter-plugins-dependencies
+.packages
 .pub-cache/
 .pub/
-/build/
-/coverage/
+build/
+coverage/
+doc/api/
+ios/Flutter/.last_build_id
 
-# Symbolication related
-app.*.symbols
+# -----------------------
+# Firebase config (DO NOT TRACK)
+# -----------------------
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+lib/firebase_options.dart
 
-# Obfuscation related
-app.*.map.json
+# -----------------------
+# Environment & Secrets
+# -----------------------
+.env
+.env.*
+.env.local
+.env.development
+.env.production
 
-# Android Studio will place build artifacts here
-/android/app/debug
-/android/app/profile
-/android/app/release
+# -----------------------
+# Other generated files
+# -----------------------
+*.lock
+*.class
+*.jar
+*.pyc
+*.apk
+*.aab
+*.symbols
+*.map.json
+
+# -----------------------
+# IDE/Build Systems
+# -----------------------
+.gradle/
+android/.gradle/
+android/local.properties
+android/.idea/
+build/
+.macos/
+windows/
+linux/

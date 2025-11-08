@@ -6,50 +6,41 @@ class SharedPreferenceHelper {
   static const String userNameKey = "USERNAMEKEY";
   static const String userEmailKey = "USERMAILKEY";
   static const String userImageKey = "USERIMAGEKEY";
-  static const String userRoleKey = "USERROLEKEY";
+  static const String userRoleKey = "USERROLEKEY"; // Assuming a default role
 
-  // ===== SAVE USER DATA =====
+  // --- Save Methods ---
+
   Future<void> saveUserId(String userId) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(userIdKey, userId);
   }
 
-  Future<void> saveUserName(String userName) async {
+  Future<void> saveUserName(String name) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(userNameKey, userName);
+    await prefs.setString(userNameKey, name);
   }
 
-  Future<void> saveUserEmail(String userEmail) async {
+  Future<void> saveUserEmail(String email) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(userEmailKey, userEmail);
+    await prefs.setString(userEmailKey, email);
   }
 
-  Future<void> saveUserImage(String userImage) async {
+  Future<void> saveUserImage(String imageUrl) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(userImageKey, userImage);
+    await prefs.setString(userImageKey, imageUrl);
   }
 
-  Future<void> saveUserRole(String role) async {
+  // NOTE: This generalized method now only accepts simple strings for update.
+  Future<void> saveUserProfile(
+      {String? name, String? image, String? role}) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(userRoleKey, role);
+    if (name != null) await prefs.setString(userNameKey, name);
+    if (image != null) await prefs.setString(userImageKey, image);
+    if (role != null) await prefs.setString(userRoleKey, role);
   }
 
-  // ===== SAVE FULL PROFILE OR PARTIAL (OPTION 2) =====
-  Future<void> saveUserProfile({
-    String? id,
-    String? name,
-    String? email,
-    String? image,
-    String? role,
-  }) async {
-    if (id != null) await saveUserId(id);
-    if (name != null) await saveUserName(name);
-    if (email != null) await saveUserEmail(email);
-    if (image != null) await saveUserImage(image);
-    if (role != null) await saveUserRole(role);
-  }
+  // --- Get Methods ---
 
-  // ===== GET USER DATA =====
   Future<String?> getUserId() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(userIdKey);
@@ -72,40 +63,18 @@ class SharedPreferenceHelper {
 
   Future<String?> getUserRole() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(userRoleKey);
+    // Provide a default role if not found to prevent null errors
+    return prefs.getString(userRoleKey) ?? "user";
   }
 
-  // ===== GET FULL PROFILE AS MAP =====
-  Future<Map<String, String?>> getUserProfileMap() async {
-    final prefs = await SharedPreferences.getInstance();
-    return {
-      "id": prefs.getString(userIdKey),
-      "name": prefs.getString(userNameKey),
-      "email": prefs.getString(userEmailKey),
-      "image": prefs.getString(userImageKey),
-      "role": prefs.getString(userRoleKey),
-    };
-  }
-
-  // ===== DELETE USER PROFILE =====
-  Future<void> deleteUserProfile() async {
-    final prefs = await SharedPreferences.getInstance();
-    await Future.wait([
-      prefs.remove(userIdKey),
-      prefs.remove(userNameKey),
-      prefs.remove(userEmailKey),
-      prefs.remove(userImageKey),
-      prefs.remove(userRoleKey),
-    ]);
-  }
-
-  // ===== CLEAR ALL USER DATA =====
-  Future<void> clearUserData() async {
-    await deleteUserProfile();
-  }
-
+  // --- Clear Method ---
   Future<void> clearAll() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
+    // Only remove user-specific keys, keep others if they exist
+    await prefs.remove(userIdKey);
+    await prefs.remove(userNameKey);
+    await prefs.remove(userEmailKey);
+    await prefs.remove(userImageKey);
+    await prefs.remove(userRoleKey);
   }
 }

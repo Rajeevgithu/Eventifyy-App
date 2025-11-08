@@ -14,7 +14,6 @@ class AuthMethods {
   Future<User?> getCurrentUser() async => _auth.currentUser;
 
   // -------------------- Google Sign-In (Firebase only) --------------------
-  /// Use this when you have the user's Google ID token & access token
   Future<void> signInWithGoogleIdToken({
     required String idToken,
     required String accessToken,
@@ -46,14 +45,11 @@ class AuthMethods {
       };
       await DatabaseMethods().addUserDetail(userInfoMap, user.uid);
 
-      // Navigate
+      // ✅ Navigate to bottom navigation screen
       if (context.mounted) {
-        // *** POTENTIAL FIX: Assuming the widget in bottomnav.dart is named BottomNav ***
         Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(
-              builder: (_) =>
-                  const BottomAppBar()), // Changed BottomAppBar to BottomNav
+          MaterialPageRoute(builder: (_) => const Bottomnav()),
           (route) => false,
         );
 
@@ -126,8 +122,8 @@ class AuthMethods {
     if (user == null) return;
 
     try {
-      await DatabaseMethods().deleteUser(user.uid); // Firestore doc
-      await user.delete(); // Firebase Auth
+      await DatabaseMethods().deleteUser(user.uid);
+      await user.delete();
       await SharedPreferenceHelper().clearAll();
 
       if (context.mounted) {

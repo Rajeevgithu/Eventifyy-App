@@ -27,32 +27,46 @@ dependencies:
 
   cupertino_icons: ^1.0.8
   curved_navigation_bar: ^1.0.6
-  firebase_core: ^2.25.3 # Updated
-  firebase_auth: ^4.16.0 # Updated
-  google_sign_in: ^6.2.1
-  cloud_firestore: ^4.15.3 # Updated
-  image_picker: ^1.0.7
-  firebase_storage: ^11.6.4 # Updated
-  random_string: ^2.3.1
-  intl: ^0.19.0
-  flutter_stripe: ^10.1.0
-  http: ^1.2.0
+
+  # --- Firebase (aligned, stable as of Nov 2025) ---
+  firebase_core: ^4.2.1
+  firebase_auth: ^6.1.2
+  cloud_firestore: ^6.1.0
+  firebase_storage: ^13.0.4
+  google_sign_in: ^7.2.0
+
+  # --- Core & Utils ---
+  flutter_dotenv: ^6.0.0
   shared_preferences: ^2.2.2
+  http: ^1.2.2        # minor patch bump (stabilized)
+  intl: ^0.20.2
+  random_string: ^2.3.1
   cloudinary_public: ^0.23.1
-  flutter_dotenv: ^5.1.0
-  google_fonts: ^6.1.0
-  flutter_animate: ^4.2.0
-  lottie: ^3.0.0
-  geolocator: ^11.0.0 # Updated
-  geocoding: ^3.0.0 # Updated
-  permission_handler: ^11.3.1 # Updated
+
+  # --- UI & Animation ---
+  google_fonts: ^6.2.1   # (small update; fixes layout issues in Flutter 3.24)
+  flutter_animate: ^4.5.0 # (adds better performance and new effects)
+  lottie: ^3.1.0          # (fixes null-safety warnings)
+ 
+
+  # --- Location & Permissions ---
+  geolocator: ^14.0.2
+  geocoding: ^4.0.0
+  permission_handler: ^12.0.1
+
+  # --- Payments ---
+  flutter_stripe: ^12.1.0
+
+  # --- Media ---
+  image_picker: ^1.1.2    # (updated for latest Android 14 permissions)
+
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
 
 
-  flutter_lints: ^5.0.0
+  flutter_lints: ^6.0.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

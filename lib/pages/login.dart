@@ -7,7 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'signup.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-// Converted to a StatefulWidget to manage hover states
+// Converted to a StatefulWidget to manage hover states and loading state
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -22,6 +22,8 @@ class _LoginPageState extends State<LoginPage> {
   // State variables for hover effects (primarily for web/desktop)
   bool _isLoginHovered = false;
   bool _isSignupHovered = false;
+  // New state for loading indicator
+  bool _isLoading = false;
 
   // Helper to show SnackBar with custom color
   void _showSnackBar(String message, {Color? backgroundColor}) {
@@ -44,6 +46,10 @@ class _LoginPageState extends State<LoginPage> {
           backgroundColor: Colors.orange);
       return;
     }
+
+    setState(() {
+      _isLoading = true; // Start loading
+    });
 
     try {
       final auth = AuthMethods();
@@ -75,6 +81,7 @@ class _LoginPageState extends State<LoginPage> {
         }
 
         // Save user info locally
+        // *** THE ERROR IS LIKELY TO OCCUR IN ONE OF THESE CALLS, OR IN A WRAPPER AROUND THEM. ***
         await SharedPreferenceHelper().saveUserId(user.uid);
         await SharedPreferenceHelper().saveUserEmail(
           user.email ?? "",
@@ -95,6 +102,10 @@ class _LoginPageState extends State<LoginPage> {
           '/home', // This will be intercepted by AuthGate
           (_) => false,
         );
+      } else {
+        // Should only happen if Firebase Auth returned null without an exception (rare, but good practice)
+        _showSnackBar("Login failed. User object is null.",
+            backgroundColor: Colors.red);
       }
     } on FirebaseAuthException catch (e) {
       // --- Specific Firebase Error Handling ---
@@ -119,8 +130,14 @@ class _LoginPageState extends State<LoginPage> {
 
       _showSnackBar(errorMessage, backgroundColor: bgColor);
     } catch (e) {
-      // --- General Catch-all Error Handling (for non-Firebase exceptions) ---
+      // --- General Catch-all Error Handling (THIS IS WHERE YOUR TYPE CAST ERROR WAS PRINTED) ---
       _showSnackBar("An unexpected error occurred: ${e.toString()}");
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false; // Stop loading regardless of success/failure
+        });
+      }
     }
   }
 
@@ -224,12 +241,14 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   const SizedBox(height: 20),
 
-                  // Email/Password Login button with Hover effect
+                  // Email/Password Login button with Hover effect and Loading
                   MouseRegion(
                     onEnter: (_) => setState(() => _isLoginHovered = true),
                     onExit: (_) => setState(() => _isLoginHovered = false),
                     child: ElevatedButton(
-                      onPressed: _loginUser,
+                      onPressed: _isLoading
+                          ? null
+                          : _loginUser, // Disable button when loading
                       style: ElevatedButton.styleFrom(
                         // Dynamic color change on hover
                         backgroundColor: _isLoginHovered
@@ -244,14 +263,23 @@ class _LoginPageState extends State<LoginPage> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      child: Text(
-                        "Login",
-                        style: GoogleFonts.poppins(
-                          color: const Color(0xff5a3efc),
-                          fontWeight: FontWeight.w700,
-                          fontSize: 16,
-                        ),
-                      ),
+                      child: _isLoading
+                          ? const SizedBox(
+                              height: 24,
+                              width: 24,
+                              child: CircularProgressIndicator(
+                                color: Color(0xff5a3efc),
+                                strokeWidth: 3,
+                              ),
+                            )
+                          : Text(
+                              "Login",
+                              style: GoogleFonts.poppins(
+                                color: const Color(0xff5a3efc),
+                                fontWeight: FontWeight.w700,
+                                fontSize: 16,
+                              ),
+                            ),
                     ),
                   ),
                   const SizedBox(height: 30),
@@ -261,12 +289,16 @@ class _LoginPageState extends State<LoginPage> {
                     onEnter: (_) => setState(() => _isSignupHovered = true),
                     onExit: (_) => setState(() => _isSignupHovered = false),
                     child: TextButton(
-                      onPressed: () {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (_) => const SignupPage()),
-                        );
-                      },
+                      onPressed: _isLoading
+                          ? null
+                          : () {
+                              // Disable button when loading
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (_) => const SignupPage()),
+                              );
+                            },
                       style: TextButton.styleFrom(
                         padding: EdgeInsets.zero,
                         // Ensure the whole link area reacts

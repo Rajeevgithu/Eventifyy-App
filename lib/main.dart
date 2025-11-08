@@ -10,59 +10,52 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_stripe/flutter_stripe.dart' as stripe_mobile;
 
+// ✅ Import your generated Firebase options file
+import 'firebase_options.dart';
+
 Future<void> main() async {
-  // 1. Must be the first call in main
+  // 1️⃣ Make sure Flutter bindings are ready
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 🧩 Load environment variables with error handling
+  // 2️⃣ Load environment variables safely
   try {
     await dotenv.load(fileName: ".env");
     debugPrint("✅ .env file loaded successfully!");
   } catch (e) {
-    debugPrint("❌ CRITICAL ERROR: Failed to load .env file: $e");
+    debugPrint("❌ Failed to load .env file: $e");
   }
 
-  // Retrieve keys only AFTER loading dotenv
+  // Retrieve Stripe publishable key after loading dotenv
   final publishableKey = dotenv.env['STRIPE_PUBLISHABLE_KEY'] ?? "";
 
-  // Quick check for Cloudinary keys to aid debugging
-  debugPrint("Cloudinary Cloud Name: ${dotenv.env['CLOUDINARY_CLOUD_NAME']}");
+  // Optional sanity check for Cloudinary vars
   debugPrint(
-      "Cloudinary Upload Preset: ${dotenv.env['CLOUDINARY_UPLOAD_PRESET']}");
+      "🌩️ Cloudinary Cloud Name: ${dotenv.env['CLOUDINARY_CLOUD_NAME']}");
+  debugPrint(
+      "🌩️ Cloudinary Upload Preset: ${dotenv.env['CLOUDINARY_UPLOAD_PRESET']}");
 
-  // 🔥 Initialize Firebase and Stripe
-  if (kIsWeb) {
-    // NOTE: Replace these with actual non-public keys from your Firebase project config
-    // This block is only for web builds.
+  // 3️⃣ Initialize Firebase for the current platform
+  try {
     await Firebase.initializeApp(
-      options: const FirebaseOptions(
-        apiKey: "AIzaSyABCUjsHya7Gsav4inFCRz7RITyiRuQKnI",
-        authDomain: "event-booking-app-1fa34.firebaseapp.com",
-        projectId: "event-booking-app-1fa34",
-        storageBucket: "event-booking-app-1fa34.firebasestorage.app",
-        messagingSenderId: "288536620731",
-        appId: "1:288536620731:web:0c9b24cc91e788ea64039e",
-        measurementId: "G-X0EBVM16S2",
-      ),
+      options: DefaultFirebaseOptions.currentPlatform,
     );
-
-    debugPrint("✅ Firebase initialized for Web (Stripe web init skipped)");
-  } else {
-    // This block runs for Android/iOS (the emulator)
-    await Firebase.initializeApp();
-
-    // Initialize Stripe for Mobile
-    stripe_mobile.Stripe.publishableKey = publishableKey;
-    await stripe_mobile.Stripe.instance.applySettings();
-    debugPrint("✅ Firebase + Stripe initialized for Mobile");
+    debugPrint("🔥 Firebase initialized successfully!");
+  } catch (e) {
+    debugPrint("❌ Firebase initialization failed: $e");
   }
 
+  // 4️⃣ Initialize Stripe for mobile only
+  if (!kIsWeb) {
+    stripe_mobile.Stripe.publishableKey = publishableKey;
+    await stripe_mobile.Stripe.instance.applySettings();
+    debugPrint("💳 Stripe initialized for mobile.");
+  } else {
+    debugPrint("💻 Web build detected – skipping mobile Stripe setup.");
+  }
+
+  // 5️⃣ Launch the app
   runApp(const MyApp());
 }
-
-// NOTE: The previous AuthGate widget was removed. The authentication check
-// must now happen inside the SplashScreen to follow the required sequence:
-// SplashScreen -> SignupPage (if not logged in) -> Home (if logged in or after signup)
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -77,22 +70,12 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
         fontFamily: 'Poppins',
       ),
-      // Set the initial route to the splash screen
+      // 🏁 Start at the splash screen
       initialRoute: '/splash',
       routes: {
-        // The first screen
         '/splash': (context) => const SplashScreen(),
-
-        // The authentication flow starts here:
-        // After the splash screen delay is complete, the logic in SplashScreen
-        // should check for the current user and:
-        // 1. If user is logged in: Navigate to '/home'.
-        // 2. If user is NOT logged in: Navigate to '/signup' (as requested).
-
         '/signup': (context) => const SignupPage(),
         '/login': (context) => const LoginPage(),
-
-        // Main App Content (only accessible after successful authentication)
         '/home': (context) => const Home(),
         '/profile': (context) => const Profile(),
         '/upload_event': (context) => const UploadEvent(),
