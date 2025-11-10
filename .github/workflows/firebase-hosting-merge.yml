@@ -1,18 +1,35 @@
-# 1. ADDED: Setup Flutter Environment
-  - uses: subosito/flutter-action@v2
-    with:
-      channel: 'stable' # Use the stable channel
+name: Flutter CI/CD to Firebase Hosting # You can name this anything
+
+on:
+  push:
+    branches:
+      - main
+
+
+jobs:
+  build_and_deploy: # This is the job name
+    runs-on: ubuntu-latest
+    
+    steps: # <-- All steps MUST be indented under this 'steps:' key
       
-  # 2. ADDED: Get Flutter dependencies
-  - run: flutter pub get
+      # 1. Checkout repository code
+      - uses: actions/checkout@v4
       
-  # 3. Build the web app (Now the 'flutter' command will work)
-  - run: flutter build web
-      
-  # 4. Deploy to Firebase Hosting
-  - uses: FirebaseExtended/action-hosting-deploy@v0
-    with:
-      repoToken: ${{ secrets.GITHUB_TOKEN }}
-      firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_EVENT_BOOKING_APP_1FA34 }}
-      channelId: live
-      projectId: event-booking-app-1fa34
+      # 2. Setup Flutter Environment
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      # 3. Get Flutter dependencies
+      - run: flutter pub get
+
+      # 4. Build the web app
+      - run: flutter build web
+
+      # 5. Deploy to Firebase Hosting
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_EVENT_BOOKING_APP_1FA34 }}
+          channelId: live
+          projectId: event-booking-app-1fa34
