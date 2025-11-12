@@ -1,9 +1,9 @@
 🎟️ Eventifyy — Flutter Event Booking App
 
-<!--
-NOTE: These badges are placeholders. You will need to set up GitHub Actions
-and other services to generate real, dynamic badge links.
--->
+🌐 Live URL
+
+👉 https://event-booking-app-1fa34.web.app
+
 # 🎟️ Eventifyy — Flutter Event Booking App
 
 > A modern cross-platform event booking application built with **Flutter** and powered by **Firebase**.  
