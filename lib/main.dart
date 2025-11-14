@@ -1,9 +1,11 @@
+// main.dart
+
 import 'package:event_booking_app/admin/upload_event.dart';
-import 'package:event_booking_app/pages/home.dart';
+import 'package:event_booking_app/pages/OnboardingWrapper.dart'; // ✅ Imported
+import 'package:event_booking_app/pages/bottomnav.dart';
 import 'package:event_booking_app/pages/login.dart';
 import 'package:event_booking_app/pages/profile.dart';
 import 'package:event_booking_app/pages/signup.dart';
-import 'package:event_booking_app/pages/splash_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -70,13 +72,14 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
         fontFamily: 'Poppins',
       ),
-      // 🏁 Start at the splash screen
-      initialRoute: '/splash',
+      // 🏁 This is correct: starts with the OnboardingWrapper
+      initialRoute: '/onboarding',
       routes: {
-        '/splash': (context) => const SplashScreen(),
+        // This directs the app to start with the multi-page onboarding flow
+        '/onboarding': (context) => const OnboardingWrapper(),
         '/signup': (context) => const SignupPage(),
         '/login': (context) => const LoginPage(),
-        '/home': (context) => const Home(),
+        '/home': (context) => const Bottomnav(),
         '/profile': (context) => const Profile(),
         '/upload_event': (context) => const UploadEvent(),
       },

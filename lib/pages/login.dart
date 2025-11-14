@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:event_booking_app/services/auth.dart';
-import 'package:event_booking_app/services/database.dart';
+
 import 'package:event_booking_app/services/shared_pref.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -171,10 +171,10 @@ class _LoginPageState extends State<LoginPage> {
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.25),
-                          spreadRadius: 2,
-                          blurRadius: 15,
-                          offset: const Offset(0, 8),
+                          color: Colors.black.withOpacity(0.08),
+                          spreadRadius: 1,
+                          blurRadius: 5,
+                          offset: const Offset(0, 3),
                         ),
                       ],
                     ),

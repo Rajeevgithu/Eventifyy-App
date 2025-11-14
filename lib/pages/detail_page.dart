@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:intl/intl.dart';
 
 class DetailPage extends StatefulWidget {
   final String image, name, location, date, detail, price;
@@ -26,6 +27,7 @@ class DetailPage extends StatefulWidget {
 class _DetailPageState extends State<DetailPage> {
   Map<String, dynamic>? paymentIntent;
   int ticket = 1;
+  late int basePrice;
   int total = 0;
 
   String? userName, userImage, userId;
@@ -33,10 +35,16 @@ class _DetailPageState extends State<DetailPage> {
 
   bool isProcessing = false;
 
+  // Theme Colors
+  static const Color primaryColor = Color(0xff6351ec);
+  static const Color accentColor = Color(0xFF1E3A8A); // A dark blue for contrast
+
   @override
   void initState() {
     super.initState();
-    total = int.tryParse(widget.price) ?? 0;
+    // Parse the price safely
+    basePrice = int.tryParse(widget.price) ?? 0;
+    total = basePrice;
     _loadUserData();
   }
 
@@ -47,122 +55,136 @@ class _DetailPageState extends State<DetailPage> {
     if (mounted) setState(() {});
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Stack(
-        children: [
-          SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildEventImage(context),
-                const SizedBox(height: 20),
-                _buildEventDescription(),
-                const SizedBox(height: 30),
-                _buildTicketCounter(),
-                const SizedBox(height: 30),
-                _buildBookingBar(context),
-                const SizedBox(height: 40),
-              ],
-            ),
+  // Helper to format date
+  String get _formattedDate {
+    try {
+      final dateTime = DateTime.parse(widget.date);
+      return DateFormat('EEEE, MMM d, yyyy').format(dateTime);
+    } catch (_) {
+      return widget.date;
+    }
+  }
+
+  // --- UI Building Blocks ---
+
+  // 🖼 Header with image & Collapsing AppBar (SliverAppBar)
+  Widget _buildSliverAppBar() {
+    return SliverAppBar(
+      expandedHeight: 350.0,
+      floating: false,
+      pinned: true,
+      backgroundColor: primaryColor,
+      elevation: 0,
+      leading: Padding(
+        padding: const EdgeInsets.only(left: 10, top: 10),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withOpacity(0.1), blurRadius: 5),
+            ],
           ),
-          if (isProcessing)
-            Container(
-              color: Colors.black.withOpacity(0.4),
-              child: const Center(
-                child: CircularProgressIndicator(color: Color(0xff6351ec)),
-              ),
-            ),
-        ],
+          child: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_outlined,
+                color: Colors.black54, size: 20),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ),
+      ),
+      flexibleSpace: FlexibleSpaceBar(
+        titlePadding: const EdgeInsets.only(bottom: 16, left: 60, right: 60),
+        title: Text(
+          widget.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
+        ),
+        background: widget.image.isNotEmpty
+            ? Image.network(
+          widget.image,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) =>
+              Image.asset("images/event.jpg", fit: BoxFit.cover),
+        )
+            : Image.asset("images/event.jpg", fit: BoxFit.cover),
       ),
     );
   }
 
-  // 🖼 Header with image & details
-  Widget _buildEventImage(BuildContext context) {
-    return Stack(
-      children: [
-        widget.image.isNotEmpty
-            ? Image.network(
-                widget.image,
-                height: MediaQuery.of(context).size.height / 2,
-                width: double.infinity,
-                fit: BoxFit.cover,
-              )
-            : Image.asset(
-                "images/event.jpg",
-                height: MediaQuery.of(context).size.height / 2,
-                width: double.infinity,
-                fit: BoxFit.cover,
-              ),
-        Positioned(
-          top: 40,
-          left: 20,
-          child: GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(30),
-              ),
-              child: const Icon(Icons.arrow_back_ios_new_outlined),
+  // ℹ️ General Information Card
+  Widget _buildGeneralInfoCard() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black12.withOpacity(0.08),
+              blurRadius: 15,
+              offset: const Offset(0, 8),
             ),
-          ),
+          ],
         ),
-        Positioned(
-          bottom: 0,
-          left: 0,
-          right: 0,
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            color: Colors.black.withOpacity(0.55),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.name,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.calendar_month,
-                      color: Colors.white,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      widget.date,
-                      style: const TextStyle(color: Colors.white, fontSize: 15),
-                    ),
-                    const SizedBox(width: 20),
-                    const Icon(
-                      Icons.location_on_outlined,
-                      color: Colors.white,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        widget.location,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.name,
+              style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: accentColor,
+              ),
+            ),
+            const Divider(height: 25),
+            _buildInfoRow(
+              Icons.calendar_month,
+              _formattedDate,
+              Colors.redAccent,
+            ),
+            const SizedBox(height: 15),
+            _buildInfoRow(
+              Icons.location_on_outlined,
+              widget.location,
+              Colors.blueAccent,
+            ),
+            const SizedBox(height: 15),
+            _buildInfoRow(
+              Icons.attach_money,
+              basePrice == 0
+                  ? "Free Event"
+                  : "Starts from ₹${widget.price}",
+              primaryColor,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Helper widget for information rows
+  Widget _buildInfoRow(IconData icon, String text, Color color) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: color, size: 24),
+        const SizedBox(width: 15),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontSize: 16,
+              color: Colors.black87,
+              fontWeight: FontWeight.w500,
             ),
           ),
         ),
@@ -173,74 +195,97 @@ class _DetailPageState extends State<DetailPage> {
   // 📄 About event section
   Widget _buildEventDescription() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
             "About Event",
-            style: TextStyle(fontSize: 25, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: accentColor,
+            ),
           ),
           const SizedBox(height: 10),
           Text(
             widget.detail,
             style: const TextStyle(
-              fontSize: 17,
+              fontSize: 16,
               color: Colors.black87,
-              height: 1.5,
+              height: 1.6,
             ),
+            textAlign: TextAlign.justify,
           ),
         ],
       ),
     );
   }
 
-  // 🎟 Ticket selector
+  // 🎟 Modern Ticket selector
   Widget _buildTicketCounter() {
+    if (basePrice == 0) return const SizedBox.shrink(); // Hide if free
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            "Number of Tickets",
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-          Container(
-            width: 70,
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.black45, width: 1.5),
-              borderRadius: BorderRadius.circular(12),
+            "Select Tickets",
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: accentColor,
             ),
-            child: Column(
+          ),
+          const SizedBox(height: 15),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 15),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                IconButton(
-                  icon: const Icon(Icons.add, size: 20),
-                  onPressed: () {
-                    setState(() {
-                      ticket++;
-                      total = ticket * (int.tryParse(widget.price) ?? 0);
-                    });
-                  },
-                ),
                 Text(
-                  "$ticket",
+                  "Ticket Price: ₹${widget.price}",
                   style: const TextStyle(
-                    color: Color(0xff6351ec),
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: Colors.black54,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.remove, size: 20),
-                  onPressed: () {
-                    if (ticket > 1) {
+                Row(
+                  children: [
+                    _buildCounterButton(Icons.remove, () {
+                      if (ticket > 1) {
+                        setState(() {
+                          ticket--;
+                          total = ticket * basePrice;
+                        });
+                      }
+                    }),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 15),
+                      child: Text(
+                        "$ticket",
+                        style: const TextStyle(
+                          color: primaryColor,
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    _buildCounterButton(Icons.add, () {
                       setState(() {
-                        ticket--;
-                        total = ticket * (int.tryParse(widget.price) ?? 0);
+                        ticket++;
+                        total = ticket * basePrice;
                       });
-                    }
-                  },
+                    }),
+                  ],
                 ),
               ],
             ),
@@ -250,45 +295,129 @@ class _DetailPageState extends State<DetailPage> {
     );
   }
 
-  // 💰 Amount + Book Button
-  Widget _buildBookingBar(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
-        children: [
-          Text(
-            "Amount: ₹total",
-            style: const TextStyle(
-              color: Color(0xff6351ec),
-              fontSize: 23,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const Spacer(),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xff6351ec),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              minimumSize: const Size(180, 50),
-            ),
-            onPressed:
-                isProcessing ? null : () => makePayment(total.toString()),
-            child: const Text(
-              "Book Now",
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
+  Widget _buildCounterButton(IconData icon, VoidCallback onPressed) {
+    return InkWell(
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.all(5),
+        decoration: BoxDecoration(
+          color: primaryColor.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(icon, size: 20, color: primaryColor),
+      ),
+    );
+  }
+
+  // 💰 Sticky Footer Bar
+  Widget _buildStickyFooterBar(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 15),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black12.withOpacity(0.15),
+            blurRadius: 10,
+            offset: const Offset(0, -5),
           ),
         ],
       ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  "Total Amount",
+                  style: TextStyle(fontSize: 14, color: Colors.grey),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  basePrice == 0 ? "FREE" : "₹$total",
+                  style: const TextStyle(
+                    color: primaryColor,
+                    fontSize: 26,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const Spacer(),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                minimumSize: const Size(180, 55),
+                elevation: 5,
+              ),
+              onPressed: basePrice == 0
+                  ? (isProcessing ? null : () => _handleFreeBooking())
+                  : (isProcessing ? null : () => makePayment(total.toString())),
+              child: isProcessing
+                  ? const SizedBox(
+                height: 24,
+                width: 24,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 3,
+                ),
+              )
+                  : Text(
+                basePrice == 0 ? "Register Now" : "Book Now",
+                style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
+  }
+
+  // --- Booking Logic (Updated for Free Events) ---
+  Future<void> _handleFreeBooking() async {
+    if (userId == null) {
+      _showDialog("Error", "User not logged in.");
+      return;
+    }
+    setState(() => isProcessing = true);
+    try {
+      Map<String, dynamic> bookingData = {
+        "Number": ticket.toString(),
+        "Total": "0", // Total is always 0 for free events
+        "Event": widget.name,
+        "Location": widget.location,
+        "Date": widget.date,
+        "Name": userName,
+        "Image": userImage,
+        "EventImage": widget.image,
+        "BookingDate": DateTime.now().toIso8601String(),
+      };
+      await DatabaseMethods().addUserBooking(bookingData, userId!);
+      await DatabaseMethods().addAdminBooking(bookingData);
+      _showDialog("Registration Successful",
+          "Your ticket(s) have been successfully reserved!");
+    } catch (e) {
+      _showDialog("Registration Failed", "An error occurred: $e");
+    } finally {
+      setState(() => isProcessing = false);
+    }
   }
 
   /// 💳 Stripe Payment Flow
   Future<void> makePayment(String amount) async {
     setState(() => isProcessing = true);
     try {
+      // Logic for Stripe payment intent remains the same
       paymentIntent = await _createPaymentIntent(amount, 'INR');
       if (paymentIntent == null)
         throw Exception("Failed to create payment intent");
@@ -296,12 +425,12 @@ class _DetailPageState extends State<DetailPage> {
       await Stripe.instance.initPaymentSheet(
         paymentSheetParameters: SetupPaymentSheetParameters(
           paymentIntentClientSecret: paymentIntent!['client_secret'],
-          style: ThemeMode.dark,
+          style: ThemeMode.light, // Use light theme for better integration
           merchantDisplayName: 'Event Booking App',
         ),
       );
 
-      await _displayPaymentSheet(amount);
+      await _displayPaymentSheet();
     } catch (e) {
       _showDialog("Payment Failed", e.toString());
     } finally {
@@ -309,7 +438,7 @@ class _DetailPageState extends State<DetailPage> {
     }
   }
 
-  Future<void> _displayPaymentSheet(String amount) async {
+  Future<void> _displayPaymentSheet() async {
     try {
       await Stripe.instance.presentPaymentSheet();
 
@@ -339,11 +468,9 @@ class _DetailPageState extends State<DetailPage> {
     }
   }
 
-  /// 🧮 Create Stripe Payment Intent
+  // 🧮 Create Stripe Payment Intent (No changes needed)
   Future<Map<String, dynamic>?> _createPaymentIntent(
-    String amount,
-    String currency,
-  ) async {
+      String amount, String currency) async {
     try {
       final String? secretKey = dotenv.env['STRIPE_SECRET_KEY'];
       if (secretKey == null)
@@ -380,8 +507,52 @@ class _DetailPageState extends State<DetailPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("OK"),
+            child: const Text("OK", style: TextStyle(color: primaryColor)),
           ),
+        ],
+      ),
+    );
+  }
+
+  // --- Main Build Method ---
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.grey.shade50, // Light background for contrast
+      body: Stack(
+        children: [
+          CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              _buildSliverAppBar(), // Collapsing header
+              SliverList(
+                delegate: SliverChildListDelegate(
+                  [
+                    _buildGeneralInfoCard(), // Event Info
+                    _buildEventDescription(), // About Event
+                    const SizedBox(height: 20),
+                    _buildTicketCounter(), // Ticket Selector
+                    const SizedBox(height: 100), // Space for the floating bar
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          // Sticky Footer (Booking Bar)
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: _buildStickyFooterBar(context),
+          ),
+
+          // Loading Overlay
+          if (isProcessing)
+            Container(
+              color: Colors.black.withOpacity(0.4),
+              child: const Center(
+                child: CircularProgressIndicator(color: primaryColor),
+              ),
+            ),
         ],
       ),
     );

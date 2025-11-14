@@ -20,12 +20,26 @@ class _HomeState extends State<Home> {
   String? userName;
   String? currentLocation;
 
+  // State and controller for the search functionality
+  final TextEditingController _searchController = TextEditingController();
+  String searchQuery = "";
+
+  // Theme colors for professionalism
+  static const Color primaryColor = Color(0xff6351ec);
+  static const Color lightBg = Color(0xFFF7F7F9);
+
   @override
   void initState() {
     super.initState();
     loadUserData();
     loadEvents();
     _determinePosition();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   // Load user's name from SharedPreferences
@@ -35,10 +49,7 @@ class _HomeState extends State<Home> {
   }
 
   // Load events from Firestore
-  Future<void> loadEvents() async {
-    // You are using an async function to set a Stream, which is slightly unusual
-    // but works if `DatabaseMethods().getAllEvents()` is correctly defined
-    // to return a Stream<QuerySnapshot>.
+  void loadEvents() {
     eventStream = DatabaseMethods().getAllEvents();
     if (mounted) setState(() {});
   }
@@ -48,7 +59,6 @@ class _HomeState extends State<Home> {
     bool serviceEnabled;
     LocationPermission permission;
 
-    // Check if location services are enabled
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       setState(() {
@@ -57,7 +67,6 @@ class _HomeState extends State<Home> {
       return;
     }
 
-    // Check permissions
     permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
@@ -76,12 +85,10 @@ class _HomeState extends State<Home> {
       return;
     }
 
-    // Get position
     Position position = await Geolocator.getCurrentPosition(
       desiredAccuracy: LocationAccuracy.high,
     );
 
-    // Get placemark (address) from coordinates
     List<Placemark> placemarks = await placemarkFromCoordinates(
       position.latitude,
       position.longitude,
@@ -90,47 +97,118 @@ class _HomeState extends State<Home> {
     if (placemarks.isNotEmpty) {
       final Placemark place = placemarks.first;
       setState(() {
-        currentLocation =
-            "${place.locality ?? place.subAdministrativeArea ?? "Unknown"}, ${place.country ?? ""}";
+        // Use city/locality name for nearby filtering logic
+        currentLocation = "${place.locality ?? place.subAdministrativeArea ?? "Unknown City"}";
       });
     }
   }
 
-  // ------------------------- EVENT LIST -------------------------
-  Widget _buildEventList() {
+  // 🔔 Notification Icon Action
+  void _onNotificationPressed() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Notifications"),
+        content: const Text("This is where your event notifications would appear!"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text("Close", style: TextStyle(color: primaryColor)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ------------------------- EVENT LIST with Filtering -------------------------
+  Widget _buildEventList({bool nearbyOnly = false}) {
+    // 💡 Logic for Nearby Events section
+    String listTitle;
+    if (searchQuery.isNotEmpty) {
+      listTitle = "Search Results";
+    } else if (nearbyOnly) {
+      listTitle = "Nearby Events in $currentLocation";
+    } else {
+      listTitle = "Upcoming Events";
+    }
+
     return StreamBuilder<QuerySnapshot>(
       stream: eventStream,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(child: CircularProgressIndicator(color: primaryColor));
         }
 
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const Center(child: Text("No upcoming events found."));
+          return Center(child: Text("No $listTitle found."));
         }
 
-        final events = snapshot.data!.docs;
+        final allEvents = snapshot.data!.docs;
+
+        // --- FILTERING LOGIC ---
+        final filterQuery = searchQuery.toLowerCase();
+        final currentCity = currentLocation?.toLowerCase() ?? "";
+
+        final filteredEvents = allEvents.where((doc) {
+          final data = doc.data() as Map<String, dynamic>?;
+          if (data == null) return false;
+
+          final String name = (data["Name"] as String? ?? "").toLowerCase();
+          final String location = (data["Location"] as String? ?? "").toLowerCase();
+          final String date = (data["Date"] as String? ?? "");
+
+          // 1. Skip invalid or past events
+          DateTime? parsedDate;
+          try {
+            parsedDate = DateTime.parse(date);
+          } catch (_) {}
+          if (parsedDate == null || DateTime.now().isAfter(parsedDate)) {
+            return false;
+          }
+
+          // 2. Apply NEARBY filter (if enabled)
+          if (nearbyOnly) {
+            // Basic check: Event location contains the fetched city name
+            if (currentCity.isNotEmpty && !location.contains(currentCity)) {
+              return false;
+            }
+          }
+
+          // 3. Apply SEARCH filter
+          if (searchQuery.isNotEmpty) {
+            return name.contains(filterQuery) || location.contains(filterQuery);
+          }
+
+          return true; // Show all if no search query or nearby filter (depending on call)
+        }).toList();
+        // --- END FILTERING LOGIC ---
+
+
+        if (filteredEvents.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 50.0),
+              child: Text(
+                searchQuery.isNotEmpty
+                    ? "No events match '$searchQuery'."
+                    : "No events found for $listTitle.",
+                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+              ),
+            ),
+          );
+        }
 
         return ListView.builder(
           padding: EdgeInsets.zero,
           shrinkWrap: true,
-          physics: const BouncingScrollPhysics(),
-          itemCount: events.length,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: filteredEvents.length,
           itemBuilder: (context, index) {
-            final ds = events[index];
-
-            // ⭐️ ERROR FIX: Safely retrieve the document data map.
-            // This prevents the "Bad state: field 'X' does not exist" error.
+            final ds = filteredEvents[index];
             final data = ds.data() as Map<String, dynamic>?;
 
-            if (data == null) {
-              // Should not happen for valid documents, but safe check to skip invalid docs
-              return const SizedBox();
-            }
+            if (data == null) return const SizedBox();
 
-            // Safely access data using the 'data' map and providing default values.
-            // If the key doesn't exist in the map, data["Key"] returns null,
-            // and the ?? operator provides the default.
             final String name = data["Name"] as String? ?? "Untitled";
             final String location = data["Location"] as String? ?? "Unknown";
             final String image = data["Image"] as String? ?? "";
@@ -138,149 +216,19 @@ class _HomeState extends State<Home> {
             final String date = data["Date"] as String? ?? "";
             final String price = data["Price"] as String? ?? "0";
 
-            DateTime? parsedDate;
-            try {
-              // Note: date format must be ISO 8601 compatible for this to work
-              parsedDate = DateTime.parse(date);
-            } catch (_) {
-              // Date parsing failed, possibly due to a missing/invalid 'Date' field.
-            }
+            DateTime? parsedDate = DateTime.tryParse(date);
+            String formattedDate = parsedDate != null ? DateFormat("MMM dd").format(parsedDate) : "TBD";
 
-            if (parsedDate == null || DateTime.now().isAfter(parsedDate)) {
-              return const SizedBox(); // Skip invalid or past events
-            }
 
-            String formattedDate = DateFormat("MMM dd").format(parsedDate);
-
-            return GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => DetailPage(
-                      date: date,
-                      detail: detail,
-                      image: image,
-                      location: location,
-                      name: name,
-                      price: price,
-                    ),
-                  ),
-                );
-              },
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 🖼 Event Image
-                  Container(
-                    margin: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(10),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black12.withOpacity(0.05),
-                          blurRadius: 8,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: Stack(
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: image.isNotEmpty
-                              ? Image.network(
-                                  image,
-                                  height: 200,
-                                  width: double.infinity,
-                                  fit: BoxFit.cover,
-                                )
-                              : Image.asset(
-                                  "images/event.jpg",
-                                  height: 200,
-                                  width: double.infinity,
-                                  fit: BoxFit.cover,
-                                ),
-                        ),
-                        Positioned(
-                          top: 10,
-                          left: 10,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              formattedDate,
-                              style: const TextStyle(
-                                color: Colors.black,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // 📄 Event Name + Price
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 25,
-                      vertical: 5,
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          name,
-                          style: const TextStyle(
-                            color: Colors.black,
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        // ❌ FIX: Corrected String interpolation for price
-                        Text(
-                          "₹$price",
-                          style: const TextStyle(
-                            color: Color(0xff6351ec),
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // 📍 Location
-                  Padding(
-                    padding: const EdgeInsets.only(left: 25, bottom: 10),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.location_on, color: Colors.blue),
-                        const SizedBox(width: 5),
-                        Text(
-                          location,
-                          style: const TextStyle(
-                            color: Colors.black54,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+            return _buildEventCard(
+              context: context,
+              name: name,
+              location: location,
+              image: image,
+              detail: detail,
+              date: date,
+              price: price,
+              formattedDate: formattedDate,
             );
           },
         );
@@ -288,34 +236,207 @@ class _HomeState extends State<Home> {
     );
   }
 
+  // 📄 Enhanced Event Card Widget
+  Widget _buildEventCard({
+    required BuildContext context,
+    required String name,
+    required String location,
+    required String image,
+    required String detail,
+    required String date,
+    required String price,
+    required String formattedDate,
+  }) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => DetailPage(
+              date: date,
+              detail: detail,
+              image: image,
+              location: location,
+              name: name,
+              price: price,
+            ),
+          ),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16), // Slightly larger radius
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black12.withOpacity(0.08),
+              blurRadius: 15,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+        // 🖼 Event Image with Date Badge
+        Stack(
+        children: [
+        ClipRRect(
+        borderRadius: const BorderRadius.vertical(
+        top: Radius.circular(16),
+      ),
+      child: image.isNotEmpty
+          ? Image.network(
+        image,
+        height: 180,
+        width: double.infinity,
+        fit: BoxFit.cover,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Container(
+            height: 180,
+            color: Colors.grey[200],
+            child: const Center(child: CircularProgressIndicator(color: primaryColor)),
+          );
+        },
+        errorBuilder: (context, error, stackTrace) => Image.asset(
+          "images/event.jpg", // Placeholder
+          height: 180,
+          width: double.infinity,
+          fit: BoxFit.cover,
+        ),
+      )
+          : Image.asset(
+    "images/event.jpg", // Placeholder
+    height: 180,
+    width: double.infinity,
+    fit: BoxFit.cover,
+    ),
+    ),
+    Positioned(
+    top: 10,
+    left: 10,
+    child: Container(
+    padding: const EdgeInsets.symmetric(
+    horizontal: 12,
+    vertical: 8,
+    ),
+    decoration: BoxDecoration(
+    color: Colors.white.withOpacity(0.95),
+    borderRadius: BorderRadius.circular(12),
+    ),
+    child: Text(
+    formattedDate,
+    style: const TextStyle(
+    color: primaryColor,
+    fontSize: 15,
+    fontWeight: FontWeight.bold,
+    ),
+    ),
+    ),
+    ),
+    ],
+    ),
+
+    // 📄 Details
+    Padding(
+    padding: const EdgeInsets.all(15),
+    child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+    Row(
+    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    crossAxisAlignment: CrossAxisAlignment.center,
+    children: [
+    // Event Name
+    Flexible(
+    child: Text(
+    name,
+    style: const TextStyle(
+    color: Colors.black,
+    fontSize: 20,
+    fontWeight: FontWeight.bold,
+    ),
+    maxLines: 1,
+    overflow: TextOverflow.ellipsis,
+    ),
+    ),
+    // Price (styled more prominently)
+    Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+    decoration: BoxDecoration(
+    color: primaryColor.withOpacity(0.1),
+    borderRadius: BorderRadius.circular(8),
+    ),
+    child: Text(
+    price == "0" ? "Free" : "₹$price",
+    style: const TextStyle(
+    color: primaryColor,
+    fontSize: 18,
+    fontWeight: FontWeight.bold,
+    ),
+    ),
+    ),
+    ],
+    ),
+    const SizedBox(height: 8),
+    // Location
+    Row(
+    children: [
+    const Icon(Icons.location_on, color: Colors.blueGrey, size: 18),
+    const SizedBox(width: 5),
+    Flexible(
+    child: Text(
+    location,
+    style: const TextStyle(
+    color: Colors.black54,
+    fontSize: 16,
+    fontWeight: FontWeight.w500,
+    ),
+    overflow: TextOverflow.ellipsis,
+    ),
+    ),
+    ],
+    ),
+    ],
+    ),
+    ),
+    ],
+    ),
+    ),
+    );
+  }
+
+
   // ------------------------- CATEGORY TILE -------------------------
   Widget _buildCategoryTile(String name, String image, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 120,
-        margin: const EdgeInsets.symmetric(horizontal: 8),
-        child: Material(
-          elevation: 3,
-          borderRadius: BorderRadius.circular(10),
-          child: Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(10),
+        width: 100,
+        margin: const EdgeInsets.only(right: 15),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black12.withOpacity(0.08),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Image.asset(image, height: 35, width: 35, fit: BoxFit.cover),
-                const SizedBox(height: 10),
-                Text(
-                  name,
-                  style: const TextStyle(color: Colors.black, fontSize: 16),
-                ),
-              ],
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Image.asset(image, height: 40, width: 40, fit: BoxFit.contain),
+            const SizedBox(height: 8),
+            Text(
+              name,
+              style: const TextStyle(color: Colors.black87, fontSize: 14, fontWeight: FontWeight.w600),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -324,149 +445,190 @@ class _HomeState extends State<Home> {
   // ------------------------- UI BUILD -------------------------
   @override
   Widget build(BuildContext context) {
+    // Check if location is fetched to conditionally show the Nearby Events section
+    final isLocationReady = currentLocation != null && currentLocation != "Location disabled" && currentLocation != "Permission denied" && currentLocation != "Permission denied forever";
+
     return Scaffold(
-      body: Container(
-        padding: const EdgeInsets.only(top: 50, left: 20, right: 20),
-        width: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xffe3e6ff), Color(0xfff1f3ff)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
+      backgroundColor: lightBg,
+      body: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: Padding(
+          padding: const EdgeInsets.only(top: 60, left: 25, right: 25),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 📍 Location
+              // 🔝 Professional Header
               Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Icon(Icons.location_on_outlined),
-                  const SizedBox(width: 5),
-                  Text(
-                    currentLocation ?? "Fetching location...",
-                    style: const TextStyle(
-                      color: Colors.black,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w500,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 👋 Greeting
+                      Text(
+                        "Hello, ${userName ?? 'User'}!",
+                        style: const TextStyle(
+                          color: Colors.black87,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      // 📍 Location
+                      Row(
+                        children: [
+                          Icon(Icons.location_on_outlined, color: Colors.grey[600], size: 18),
+                          const SizedBox(width: 5),
+                          Text(
+                            currentLocation ?? "Fetching location...",
+                            style: TextStyle(
+                              color: Colors.grey[700],
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  // 🔔 Notification Icon (Now clickable)
+                  Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black12.withOpacity(0.1),
+                          blurRadius: 10,
+                          offset: const Offset(0, 5),
+                        ),
+                      ],
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.notifications_none, color: primaryColor, size: 28),
+                      onPressed: _onNotificationPressed,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
 
-              // 👋 Greeting
-              Text(
-                "Hello, ${userName ?? 'User'}!",
-                style: const TextStyle(
+              const SizedBox(height: 30),
+
+              // 🔍 Search Bar (Pill Shape, now functional)
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(30),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black12.withOpacity(0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    prefixIcon: const Icon(Icons.search, color: primaryColor),
+                    border: InputBorder.none,
+                    hintText: "Search by event name or location...",
+                    hintStyle: TextStyle(color: Colors.grey[500]),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 15.0, horizontal: 20.0),
+                  ),
+                  onChanged: (value) {
+                    setState(() {
+                      searchQuery = value.trim();
+                    });
+                  },
+                ),
+              ),
+
+              const SizedBox(height: 30),
+
+              // 🎨 Categories Section
+              const Text(
+                "Explore Categories",
+                style: TextStyle(
                   color: Colors.black,
-                  fontSize: 26,
+                  fontSize: 20,
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(height: 8),
-              Text(
-                "Here are some events near you 👇",
-                style: TextStyle(
-                  color: Colors.blue[900],
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 15),
 
-              // 🔍 Search Bar
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 15),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const TextField(
-                  decoration: InputDecoration(
-                    suffixIcon: Icon(Icons.search_outlined),
-                    border: InputBorder.none,
-                    hintText: "Search for events...",
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 25),
-
-              // 🎨 Categories
+              // 🎨 Categories List
               SizedBox(
                 height: 100,
                 child: ListView(
                   scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
                   children: [
                     _buildCategoryTile("Music", "assets/images/music.png", () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              const CategoriesEvent(eventcategory: "Music"),
-                        ),
-                      );
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => const CategoriesEvent(eventcategory: "Music")));
                     }),
-                    _buildCategoryTile("Clothing", "assets/images/tshirt.png",
-                        () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              const CategoriesEvent(eventcategory: "Clothing"),
-                        ),
-                      );
+                    _buildCategoryTile("Clothing", "assets/images/tshirt.png", () {
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => const CategoriesEvent(eventcategory: "Clothing")));
                     }),
-                    _buildCategoryTile("Festival", "assets/images/confetti.png",
-                        () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              const CategoriesEvent(eventcategory: "Festival"),
-                        ),
-                      );
+                    _buildCategoryTile("Festival", "assets/images/confetti.png", () {
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => const CategoriesEvent(eventcategory: "Festival")));
                     }),
                     _buildCategoryTile("Food", "assets/images/dish.png", () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              const CategoriesEvent(eventcategory: "Food"),
-                        ),
-                      );
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => const CategoriesEvent(eventcategory: "Food")));
                     }),
                   ],
                 ),
               ),
 
-              const SizedBox(height: 25),
+              const SizedBox(height: 30),
 
-              // 📅 Upcoming Events Title
+              // 📍 Nearby Events Section (Conditional)
+              if (isLocationReady && searchQuery.isEmpty) ...[ // Only show if location is ready and no search is active
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      "Events Near ${currentLocation!}",
+                      style: const TextStyle(
+                        color: Colors.black,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const Text(
+                      "Filter",
+                      style: TextStyle(color: primaryColor, fontSize: 16, fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                _buildEventList(nearbyOnly: true), // Use the nearby filter
+                const SizedBox(height: 30),
+              ],
+
+              // 📅 Upcoming Events Section
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: const [
                   Text(
-                    "Upcoming Events",
+                    "Global Upcoming Events",
                     style: TextStyle(
                       color: Colors.black,
-                      fontSize: 22,
+                      fontSize: 20,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   Text(
                     "See all",
-                    style: TextStyle(color: Colors.black54, fontSize: 18),
+                    style: TextStyle(color: primaryColor, fontSize: 16, fontWeight: FontWeight.w500),
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 20),
 
-              // 🧾 Event List
-              _buildEventList(),
+              // 🧾 Event List (Now filtered)
+              _buildEventList(nearbyOnly: false), // Use the standard upcoming filter
+              const SizedBox(height: 40), // Space for bottom navigation bar
             ],
           ),
         ),

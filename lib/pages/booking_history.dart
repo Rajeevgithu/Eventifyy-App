@@ -12,29 +12,37 @@ class BookingHistory extends StatefulWidget {
 }
 
 class _BookingHistoryState extends State<BookingHistory> {
-  Stream? bookingStream;
+  Stream<QuerySnapshot>? bookingStream;
 
   @override
   void initState() {
     super.initState();
-    String userId = FirebaseAuth.instance.currentUser!.uid;
-    loadBookings(userId);
+    // 🛑 SAFER AUTH CHECK
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      loadBookings(user.uid);
+    } else {
+      // User is unexpectedly null, handle gracefully
+      debugPrint("User not found for booking history.");
+      // Optional: Navigator.pushReplacementNamed(context, '/login');
+    }
   }
 
   void loadBookings(String userId) {
-    bookingStream = DatabaseMethods().getUserBookings(userId);
+    // Ensuring the stream is typed for better safety
+    bookingStream = DatabaseMethods().getUserBookings(userId) as Stream<QuerySnapshot>?;
     setState(() {});
   }
 
   Widget allBookings() {
-    return StreamBuilder(
+    return StreamBuilder<QuerySnapshot>( // Added type hint for clarity
       stream: bookingStream,
-      builder: (context, AsyncSnapshot snapshot) {
+      builder: (context, AsyncSnapshot<QuerySnapshot> snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
 
-        if (!snapshot.hasData || snapshot.data.docs.isEmpty) {
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return const Center(
             child: Text(
               "No booking history found.",
@@ -45,9 +53,9 @@ class _BookingHistoryState extends State<BookingHistory> {
 
         return ListView.builder(
           padding: EdgeInsets.zero,
-          itemCount: snapshot.data.docs.length,
+          itemCount: snapshot.data!.docs.length,
           itemBuilder: (context, index) {
-            DocumentSnapshot ds = snapshot.data.docs[index];
+            DocumentSnapshot ds = snapshot.data!.docs[index];
 
             return Container(
               margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -71,7 +79,8 @@ class _BookingHistoryState extends State<BookingHistory> {
                     ClipRRect(
                       borderRadius: BorderRadius.circular(10),
                       child: Image.network(
-                        ds["Image"] ?? "",
+                        // ✅ CORRECTED FIELD NAME
+                        ds["EventImage"] ?? "",
                         height: 90,
                         width: 90,
                         fit: BoxFit.cover,
@@ -147,7 +156,8 @@ class _BookingHistoryState extends State<BookingHistory> {
                               ),
                               const SizedBox(width: 5),
                               Text(
-                                "\$${ds["Total"] ?? "0"}",
+                                // ✅ CORRECTED CURRENCY SYMBOL
+                                "₹${ds["Total"] ?? "0"}",
                                 style: const TextStyle(
                                   color: Colors.black,
                                   fontSize: 16,
@@ -173,9 +183,9 @@ class _BookingHistoryState extends State<BookingHistory> {
                         Text(
                           ds["BookingDate"] != null
                               ? DateFormat('MMM d, yyyy').format(
-                                  (ds["BookingDate"] as Timestamp).toDate(),
-                                )
-                              : "",
+                            (ds["BookingDate"] as Timestamp).toDate(),
+                          )
+                              : "N/A", // Added N/A fallback
                           style: const TextStyle(
                             fontSize: 13,
                             color: Colors.black54,
