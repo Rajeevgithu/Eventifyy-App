@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:event_booking_app/pages/bottomnav.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:event_booking_app/admin/upload_event.dart';
 import 'package:event_booking_app/pages/home.dart';
@@ -77,7 +78,7 @@ class _SplashScreenState extends State<SplashScreen>
         if (!mounted) return;
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const Home()),
+          MaterialPageRoute(builder: (_) => const Bottomnav()),
         );
       }
     } catch (e) {
